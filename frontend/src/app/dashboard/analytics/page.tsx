@@ -125,26 +125,31 @@ export default function AnalyticsPage() {
         >
           <h3 className="font-outfit font-semibold text-white mb-1">Call Outcomes</h3>
           <p className="text-xs text-[#71717A] mb-4">This month</p>
-          <ResponsiveContainer width="100%" height={160}>
-            <PieChart>
-              <Pie
-                data={outcomeData}
-                innerRadius={45}
-                outerRadius={70}
-                paddingAngle={3}
-                dataKey="value"
-              >
-                {outcomeData.map((entry, index) => (
-                  <Cell key={index} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip
-                formatter={(value, name) => [value, name]}
-                contentStyle={{ background: "#1a1a1e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8 }}
-                itemStyle={{ color: "#fff" }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
+          <div style={{ width: "100%", height: 180 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={outcomeData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={48}
+                  outerRadius={72}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
+                  {outcomeData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} stroke="transparent" />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(value: any, name: any) => [value, name]}
+                  contentStyle={{ background: "#1a1a1e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8 }}
+                  itemStyle={{ color: "#fff" }}
+                  labelStyle={{ color: "#71717A" }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
           <div className="space-y-2 mt-2">
             {outcomeData.map((d) => (
               <div key={d.name} className="flex items-center justify-between text-xs">
