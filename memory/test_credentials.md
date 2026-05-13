@@ -1,23 +1,24 @@
 # Manolle AI — Test Credentials
 
-## Demo Mode
-The app runs in demo mode when Supabase credentials are not configured.
-In demo mode, all routes are accessible without authentication.
+## Supabase Configuration (ACTIVE)
+- URL: https://wtgzckpqmskidxlfmscq.supabase.co
+- Anon Key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
-## Auth Configuration
-To enable real authentication:
-1. Create a Supabase project at https://supabase.com
-2. Add credentials to /app/frontend/.env:
-   - NEXT_PUBLIC_SUPABASE_URL=your-project-url
-   - NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-3. Run the SQL schema from /app/supabase/schema.sql in Supabase SQL Editor
-4. Restart the frontend: sudo supervisorctl restart frontend
+## Auth Mode: REAL (not demo)
+- Supabase credentials configured
+- Email verification required (mailer_autoconfirm: false)
+- Route protection active via middleware
 
-## Test Users (once Supabase is configured)
-Create test users via the signup page at /auth/signup
-- Email: testuser@manolleai.com
+## Test User (create via signup page)
+- Email: test@manolleai.com
 - Password: TestPass123!
+- After signup, check email and click verification link before login
 
-## Dashboard Access
-- In demo mode: Visit https://ba97c98c-acb3-4891-ab97-d6f7ba44dd57.preview.emergentagent.com/dashboard directly
-- In production mode: Must login via /auth/login
+## App URL
+https://ba97c98c-acb3-4891-ab97-d6f7ba44dd57.preview.emergentagent.com
+
+## Supabase Dashboard Setup Required
+1. Authentication > URL Configuration:
+   - Site URL: https://ba97c98c-acb3-4891-ab97-d6f7ba44dd57.preview.emergentagent.com
+   - Redirect URL: https://ba97c98c-acb3-4891-ab97-d6f7ba44dd57.preview.emergentagent.com/auth/callback
+2. SQL Editor: Run /app/supabase/schema.sql to create tables
