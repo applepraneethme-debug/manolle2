@@ -2,25 +2,32 @@
 
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, FileText, CheckCircle2, XCircle, AlertCircle, X } from "lucide-react";
+import {
+  Upload, FileText, CheckCircle2, XCircle, AlertCircle, X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
+import { dbBatchInsert, getAuthUser } from "@/hooks/useSupabaseData";
+import { createClient } from "@/lib/supabase/client";
 
-const sampleLeads = [
-  { row: 1, name: "Amit Sharma", phone: "+91 98765 43210", email: "amit@gmail.com", status: "valid" },
-  { row: 2, name: "Priya Kumar", phone: "+91 87654 32109", email: "priya@outlook.com", status: "valid" },
-  { row: 3, name: "", phone: "+91 76543 21098", email: "test@example.com", status: "error" },
-  { row: 4, name: "Sunita Patel", phone: "+91 65432 10987", email: "amit@gmail.com", status: "duplicate" },
-  { row: 5, name: "Vikram Singh", phone: "+91 54321 09876", email: "vikram@company.com", status: "valid" },
-  { row: 6, name: "Deepa Nair", phone: "", email: "deepa@example.com", status: "error" },
-  { row: 7, name: "Rajesh Verma", phone: "+91 32109 87654", email: "rajesh@email.com", status: "valid" },
-  { row: 8, name: "Anjali Reddy", phone: "+91 21098 76543", email: "anjali@work.com", status: "valid" },
-];
+type ParsedLead = {
+  row: number;
+  name: string;
+  phone: string;
+  email: string;
+  status: "valid" | "error" | "duplicate";
+  error?: string;
+};
 
 const statusIcon: Record<string, React.ReactNode> = {
   valid: <CheckCircle2 className="w-4 h-4 text-emerald-400" />,
@@ -28,41 +35,151 @@ const statusIcon: Record<string, React.ReactNode> = {
   duplicate: <AlertCircle className="w-4 h-4 text-amber-400" />,
 };
 
-const statusBadge: Record<string, any> = {
+const statusBadge: Record<string, string> = {
   valid: "success",
   error: "destructive",
   duplicate: "warning",
 };
 
+// Lightweight CSV parser supporting quoted fields.
+function parseCSV(text: string): string[][] {
+  const rows: string[][] = [];
+  let cur: string[] = [];
+  let field = "";
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"' && text[i + 1] === '"') { field += '"'; i++; }
+      else if (ch === '"') { inQuotes = false; }
+      else { field += ch; }
+    } else {
+      if (ch === '"') inQuotes = true;
+      else if (ch === ",") { cur.push(field); field = ""; }
+      else if (ch === "\n") { cur.push(field); rows.push(cur); cur = []; field = ""; }
+      else if (ch === "\r") { /* skip */ }
+      else field += ch;
+    }
+  }
+  if (field.length > 0 || cur.length > 0) { cur.push(field); rows.push(cur); }
+  return rows.filter((r) => r.some((c) => c.trim() !== ""));
+}
+
+function parseLeads(text: string): ParsedLead[] {
+  const rows = parseCSV(text);
+  if (rows.length === 0) return [];
+
+  const headers = rows[0].map((h) => h.trim().toLowerCase());
+  const nameIdx = headers.findIndex((h) => h === "name" || h === "full name" || h === "first name");
+  const phoneIdx = headers.findIndex((h) => h === "phone" || h === "phone number" || h === "mobile");
+  const emailIdx = headers.findIndex((h) => h === "email" || h === "e-mail");
+
+  const seen = new Set<string>();
+  const result: ParsedLead[] = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const name = (nameIdx >= 0 ? r[nameIdx] : "")?.trim() || "";
+    const phone = (phoneIdx >= 0 ? r[phoneIdx] : "")?.trim() || "";
+    const email = (emailIdx >= 0 ? r[emailIdx] : "")?.trim() || "";
+    let status: ParsedLead["status"] = "valid";
+    let error: string | undefined;
+
+    if (!name) { status = "error"; error = "Missing name"; }
+    else if (!phone) { status = "error"; error = "Missing phone"; }
+    else if (seen.has(phone)) { status = "duplicate"; error = "Duplicate phone"; }
+    else { seen.add(phone); }
+
+    result.push({ row: i, name, phone, email, status, error });
+  }
+  return result;
+}
+
 export default function ImportPage() {
   const [isDragging, setIsDragging] = useState(false);
-  const [uploaded, setUploaded] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [fileName, setFileName] = useState("");
+  const [parsed, setParsed] = useState<ParsedLead[]>([]);
+  const [storagePath, setStoragePath] = useState<string>("");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const validCount = sampleLeads.filter((l) => l.status === "valid").length;
-  const errorCount = sampleLeads.filter((l) => l.status === "error").length;
-  const dupCount = sampleLeads.filter((l) => l.status === "duplicate").length;
+  const validCount = parsed.filter((l) => l.status === "valid").length;
+  const errorCount = parsed.filter((l) => l.status === "error").length;
+  const dupCount = parsed.filter((l) => l.status === "duplicate").length;
+  const uploaded = parsed.length > 0;
 
   const handleFile = async (file: File) => {
-    if (!file.name.endsWith(".csv")) {
+    if (!file.name.toLowerCase().endsWith(".csv")) {
       toast.error("Please upload a CSV file");
       return;
     }
     setFileName(file.name);
     setUploading(true);
     setUploadProgress(0);
+    setParsed([]);
 
-    for (let i = 0; i <= 100; i += 10) {
-      await new Promise((r) => setTimeout(r, 80));
-      setUploadProgress(i);
+    try {
+      // Read file
+      const text = await file.text();
+      setUploadProgress(40);
+
+      // Parse
+      const rows = parseLeads(text);
+      setUploadProgress(70);
+
+      // Try uploading to per-user Supabase storage path (optional; non-fatal if bucket missing)
+      try {
+        const user = await getAuthUser();
+        if (user) {
+          const supabase = createClient();
+          const path = `${user.id}/imports/${Date.now()}_${file.name}`;
+          const { error: upErr } = await supabase.storage
+            .from("csv-imports")
+            .upload(path, file, { upsert: false, contentType: "text/csv" });
+          if (!upErr) {
+            setStoragePath(path);
+          }
+        }
+      } catch {
+        // Storage bucket may not exist; skip silently.
+      }
+
+      setUploadProgress(100);
+      setParsed(rows);
+      toast.success(`${file.name} parsed: ${rows.length} rows`);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to parse CSV");
+    } finally {
+      setUploading(false);
     }
+  };
 
-    setUploading(false);
-    setUploaded(true);
-    toast.success(`${file.name} uploaded successfully`);
+  const handleImport = async () => {
+    const valid = parsed.filter((l) => l.status === "valid");
+    if (valid.length === 0) {
+      toast.error("No valid leads to import");
+      return;
+    }
+    setImporting(true);
+    try {
+      const payload = valid.map((l) => ({
+        name: l.name,
+        phone: l.phone,
+        email: l.email || null,
+        source: "csv_import",
+        status: "new",
+      }));
+      await dbBatchInsert("leads", payload);
+      toast.success(`${valid.length} leads imported to your account`);
+      setParsed([]);
+      setFileName("");
+      setStoragePath("");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to import");
+    } finally {
+      setImporting(false);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -73,9 +190,10 @@ export default function ImportPage() {
   };
 
   const reset = () => {
-    setUploaded(false);
+    setParsed([]);
     setFileName("");
     setUploadProgress(0);
+    setStoragePath("");
   };
 
   return (
@@ -109,11 +227,11 @@ export default function ImportPage() {
                     {isDragging ? "Drop your CSV here" : "Upload CSV file"}
                   </p>
                   <p className="text-[#71717A] text-xs mt-1">
-                    Drag & drop or click to browse
+                    Drag &amp; drop or click to browse
                   </p>
                 </div>
                 <div className="text-xs text-[#71717A]">
-                  Supports: Name, Phone, Email columns
+                  Supports: name, phone, email columns
                 </div>
               </div>
               <input
@@ -132,16 +250,16 @@ export default function ImportPage() {
               className="glass-card p-6"
             >
               <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0">
                     <FileText className="w-5 h-5 text-emerald-400" />
                   </div>
-                  <div>
-                    <div className="text-sm font-medium text-white">{fileName}</div>
-                    <div className="text-xs text-[#71717A]">{sampleLeads.length} rows processed</div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-white truncate">{fileName}</div>
+                    <div className="text-xs text-[#71717A]">{parsed.length} rows processed</div>
                   </div>
                 </div>
-                <button onClick={reset} className="text-[#71717A] hover:text-white" data-testid="reset-upload-btn">
+                <button onClick={reset} className="text-[#71717A] hover:text-white shrink-0" data-testid="reset-upload-btn">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -151,27 +269,33 @@ export default function ImportPage() {
                   <span className="text-emerald-400 flex items-center gap-1.5">
                     <CheckCircle2 className="w-3.5 h-3.5" /> Valid
                   </span>
-                  <span className="text-white font-semibold">{validCount}</span>
+                  <span className="text-white font-semibold" data-testid="valid-count">{validCount}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-red-400 flex items-center gap-1.5">
                     <XCircle className="w-3.5 h-3.5" /> Errors
                   </span>
-                  <span className="text-white font-semibold">{errorCount}</span>
+                  <span className="text-white font-semibold" data-testid="error-count">{errorCount}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-amber-400 flex items-center gap-1.5">
                     <AlertCircle className="w-3.5 h-3.5" /> Duplicates
                   </span>
-                  <span className="text-white font-semibold">{dupCount}</span>
+                  <span className="text-white font-semibold" data-testid="duplicate-count">{dupCount}</span>
                 </div>
               </div>
+              {storagePath && (
+                <p className="text-[10px] text-[#52525B] mt-3 truncate" title={storagePath}>
+                  Stored privately at: {storagePath}
+                </p>
+              )}
               <Button
                 className="w-full mt-4 gap-2"
-                onClick={() => toast.success(`${validCount} leads imported to your account!`)}
+                onClick={handleImport}
+                disabled={importing || validCount === 0}
                 data-testid="import-leads-btn"
               >
-                Import {validCount} Valid Leads
+                {importing ? "Importing…" : `Import ${validCount} Valid Leads`}
               </Button>
             </motion.div>
           )}
@@ -205,52 +329,54 @@ export default function ImportPage() {
                 className="glass-card overflow-hidden"
                 data-testid="leads-preview-table"
               >
-                <div className="p-4 border-b border-white/5 flex items-center justify-between">
+                <div className="p-4 border-b border-white/5 flex items-center justify-between flex-wrap gap-2">
                   <h3 className="font-semibold text-white text-sm">Lead Preview</h3>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <Badge variant="success">{validCount} Valid</Badge>
                     <Badge variant="destructive">{errorCount} Errors</Badge>
                     <Badge variant="warning">{dupCount} Dups</Badge>
                   </div>
                 </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>#</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Phone</TableHead>
-                      <TableHead className="hidden md:table-cell">Email</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sampleLeads.map((lead) => (
-                      <TableRow key={lead.row} data-testid={`preview-row-${lead.row}`}>
-                        <TableCell className="text-xs text-[#71717A]">{lead.row}</TableCell>
-                        <TableCell className={`text-sm ${!lead.name ? "text-red-400 italic" : "text-white"}`}>
-                          {lead.name || "Missing"}
-                        </TableCell>
-                        <TableCell className={`text-sm ${!lead.phone ? "text-red-400 italic" : ""}`}>
-                          {lead.phone || "Missing"}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell text-sm">{lead.email}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1.5">
-                            {statusIcon[lead.status]}
-                            <Badge variant={statusBadge[lead.status]} className="capitalize text-xs">
-                              {lead.status}
-                            </Badge>
-                          </div>
-                        </TableCell>
+                <div className="max-h-[600px] overflow-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>#</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Phone</TableHead>
+                        <TableHead className="hidden md:table-cell">Email</TableHead>
+                        <TableHead>Status</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {parsed.map((lead) => (
+                        <TableRow key={lead.row} data-testid={`preview-row-${lead.row}`}>
+                          <TableCell className="text-xs text-[#71717A]">{lead.row}</TableCell>
+                          <TableCell className={`text-sm ${!lead.name ? "text-red-400 italic" : "text-white"}`}>
+                            {lead.name || "Missing"}
+                          </TableCell>
+                          <TableCell className={`text-sm ${!lead.phone ? "text-red-400 italic" : ""}`}>
+                            {lead.phone || "Missing"}
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell text-sm">{lead.email || "—"}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1.5">
+                              {statusIcon[lead.status]}
+                              <Badge variant={statusBadge[lead.status]} className="capitalize text-xs">
+                                {lead.status}
+                              </Badge>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
 
-          {!uploaded && (
+          {!uploaded && !uploading && (
             <div className="glass-card p-12 flex flex-col items-center justify-center text-center border-dashed">
               <FileText className="w-12 h-12 text-[#71717A]/40 mb-3" />
               <p className="text-[#71717A] text-sm">Upload a CSV file to preview leads here</p>

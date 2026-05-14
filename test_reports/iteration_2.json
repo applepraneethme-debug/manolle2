@@ -1,0 +1,42 @@
+{
+  "summary": "Frontend P0 testing of Manolle AI (Next.js + Supabase). Created fresh test account via /auth/signup (qa_test_1778769601@manolleai.test / TestPass123!) — login worked immediately, suggesting Supabase 'Confirm email' is OFF for this project despite test_credentials.md note. The pre-seeded test@manolleai.com / TestPass123! credential is INVALID (Supabase returns 'Invalid login credentials'). Verified all 4 P0 areas: (1) Header dropdown DOM/testids correctly implemented in layout.tsx, (2) Calendar uses native new Date() and shows current month dynamically (May 2026 matched server now), (3) CRUD pages (Agents/Leads/Campaigns/Call History) all render real Supabase empty-states with no mock data for fresh accounts, (4) Import CSV page loads with proper UI. /dashboard overview still shows mock data — EXPECTED per problem statement (P1 deferred).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Header dropdown click interaction (Bell + Avatar)",
+        "issue": "Could not deterministically verify dropdown menu open via Playwright because the 'Welcome back!' sonner toast appears at top-right corner immediately on dashboard load and overlaps/intercepts the notifications-btn and user-avatar buttons (both positioned top-right). The DropdownMenu code itself looks correct (Radix UI implementation in /app/frontend/src/app/dashboard/layout.tsx is standard, all required data-testids present: notifications-btn, notifications-menu, user-avatar, user-menu, user-email, menu-settings, menu-profile, menu-sign-out). Recommend manual smoke test or auto-dismissing the welcome toast faster (currently appears to linger >10s).",
+        "affected_selectors": ["[data-testid=\"notifications-btn\"]", "[data-testid=\"user-avatar\"]", "sonner toast at top-right"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_2.json"],
+  "action_items": [
+    "Update /app/memory/test_credentials.md — the seeded test@manolleai.com / TestPass123! account fails with 'Invalid login credentials' on Supabase. Either recreate that user in Supabase or update the doc to instruct fresh signup.",
+    "Consider shortening 'Welcome back!' toast duration or repositioning it so it doesn't overlap the top-right header buttons (Bell + Avatar). This is a real UX issue: a real user clicking the bell within ~5s of landing on the dashboard may also have their click intercepted by the toast.",
+    "(Already known/P1) Migrate /dashboard overview page off mock data — currently shows hardcoded 247 calls / 1847 mins / Rahul Sharma / Real Estate Qualifier mock content even on a brand-new account."
+  ],
+  "critical_code_review_comments": [
+    "POSITIVE: Calendar correctly uses native new Date() — month label dynamically rendered (verified May 2026 matched server clock, not hardcoded 2025/2026).",
+    "POSITIVE: All list pages (Agents, Leads, Campaigns) show proper empty states for a fresh account — no leaked mock data. RLS / user_id scoping appears to work.",
+    "POSITIVE: All required data-testids exist (notifications-btn, user-avatar, user-menu, user-email, menu-settings, menu-profile, menu-sign-out, calendar-month-label).",
+    "Dashboard overview (/dashboard) still uses hardcoded mock data (247/1847/189/43 + Rahul Sharma activity + Real Estate Qualifier agents) — flagged as known P1 in problem statement, OK to defer.",
+    "Welcome back toast at top-right overlaps Bell + Avatar in header. Real users may hit a non-deterministic click intercept."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend-only test)",
+    "frontend": "90% — 4/4 P0 functional areas verified; only Header dropdown UX flagged due to toast overlap"
+  },
+  "test_credentials": "DOC IS STALE: test@manolleai.com / TestPass123! does NOT work (Supabase returns Invalid login credentials). Working credentials I created: qa_test_1778769601@manolleai.test / TestPass123! — signup succeeded WITHOUT email-confirmation step (auto-confirm appears enabled on this Supabase project, contrary to test_credentials.md note).",
+  "seed_data_creation": "Created 1 new Supabase auth user via /auth/signup: qa_test_1778769601@manolleai.test (no rows in ai_agents/leads/campaigns — account is fresh).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "App is in production mode — NO hot reload. Use the fresh account qa_test_1778769601@manolleai.test / TestPass123! to log in (do NOT use the documented test@manolleai.com — it returns 'Invalid login credentials'). The /dashboard overview page intentionally shows mock data per problem statement P1. All other dashboard pages (agents/leads/campaigns/call-history/calendar/import) correctly hit Supabase and show empty states for new users. Header dropdowns: code is correct with all data-testids — if you need to test them via Playwright, navigate to a non-dashboard route first (e.g. /dashboard/leads) which doesn't show the 'Welcome back!' toast.",
+  "rca of the issue": "N/A — no blocking bugs detected. Header dropdown test inconclusive due to overlapping 'Welcome back!' toast from sonner, not a code bug. The original test@manolleai.com credential failure is most likely because the user was either never created in Supabase or its password was changed; not a code defect."
+}
