@@ -2,26 +2,24 @@
 
 ## Supabase Configuration (ACTIVE)
 - URL: https://wtgzckpqmskidxlfmscq.supabase.co
-- Auth mode: REAL (not demo)
+- Auth mode: REAL (Supabase Auth, no demo)
+- Auto-confirm: ENABLED (signups go straight to logged-in, no email verification needed)
 
-## Test Account
-- Email: test@manolleai.com
+## Working Test Account (verified by testing agent on 2026-05-14)
+- Email: qa_test_1778769601@manolleai.test
 - Password: TestPass123!
-- NOTE: Account requires email verification (mailer_autoconfirm: false in Supabase).
-  If login fails with "Email not confirmed", create a fresh account via the signup page:
-    1. Visit /auth/signup
-    2. Use email/password of choice (password ≥ 8 chars)
-    3. If email confirmation is required, user must check email and click link.
-    4. Alternatively, the project owner can disable "Confirm email" in Supabase Auth settings.
+
+## How to Create More Test Accounts
+1. Visit /auth/signup
+2. Any email format works; password ≥ 8 characters
+3. Login is immediate after signup (no email link needed).
+
+## DO NOT USE
+- test@manolleai.com / TestPass123!  → returns "Invalid login credentials"
 
 ## App URL
 https://ba97c98c-acb3-4891-ab97-d6f7ba44dd57.preview.emergentagent.com
 
-## Database Tables (Supabase Public schema, RLS enabled)
-- profiles, ai_agents, campaigns, leads, call_logs, appointments, usage_tracking
-- All queries are scoped by user_id; RLS enforces auth.uid() = user_id.
-
-## Supabase Dashboard Setup (Already done by user)
-1. Authentication > URL Configuration:
-   - Site URL & Redirect URL set to preview URL above
-2. SQL Editor: /app/supabase/schema.sql has been executed
+## Database (Supabase Public schema, RLS enabled)
+Tables: profiles, ai_agents, campaigns, leads, call_logs, appointments, usage_tracking.
+All queries scoped by user_id via RLS (auth.uid() = user_id).
