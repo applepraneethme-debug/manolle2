@@ -26,7 +26,6 @@ import {
   useCallLogs,
   useAgents,
   useLeads,
-  dbDelete,
 } from "@/hooks/useSupabaseData";
 
 const STATUSES = ["completed", "no_answer", "voicemail", "failed", "busy"];
@@ -40,7 +39,7 @@ const statusConfig: Record<string, { label: string; variant: string }> = {
 };
 
 export default function CallHistoryPage() {
-  const { data: callLogs, loading } = useCallLogs();
+  const { data: callLogs, loading, remove } = useCallLogs();
   const { data: agents } = useAgents();
   const { data: leads } = useLeads();
   const [search, setSearch] = useState("");
@@ -96,7 +95,7 @@ export default function CallHistoryPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this call log?")) return;
     try {
-      await dbDelete("call_logs", id);
+      await remove(id);
       toast.success("Call log deleted");
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to delete");

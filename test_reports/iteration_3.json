@@ -1,0 +1,49 @@
+{
+  "summary": "Frontend e2e testing of Manolle AI rewrite. Ran a full real-user flow with two fresh Supabase signups. CRUD auto-refresh (the main story point) WORKS end-to-end without manual page reload on Agents, Leads, and Campaigns. Dashboard overview no longer shows 247/1847/189/43 mock numbers; reads real per-user data (0/0/0/0 for fresh account, then agent appears after creation). Analytics is fully user-scoped, no NaN/undefined. Multi-user isolation verified — User B sees zero data from User A. Calendar shows current month (May 2026). Billing has no hardcoded 2025 references. Settings Profile email correctly shows logged-in user's email. HOWEVER: Settings Profile save AND Company save both FAIL with HTTP 400 from Supabase because the upsert payload includes columns (timezone, description) that do not exist in the live schema — migration 002_realtime_and_profile_columns.sql has not been applied. Because the whole upsert fails, even the basic full_name and phone (which ARE valid columns) do NOT persist. Toast shows 'Save failed'. This contradicts the agent-to-agent note's claim that basic fields would still save.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Settings → Profile → Save Profile",
+        "issue": "Supabase upsert returns 400 PGRST204: \"Could not find the 'timezone' column of 'profiles' in the schema cache\". Because saveProfile() in /app/frontend/src/app/dashboard/settings/page.tsx (line 142-149) always bundles full_name, phone, AND timezone in a single upsert, the unknown 'timezone' column fails the whole request — full_name and phone never persist. After page refresh both fields revert to empty/auth-metadata default. Toast shows 'Save failed'.",
+        "affected_selectors": ["[data-testid=\"save-profile-btn\"]", "[data-testid=\"profile-name-input\"]", "[data-testid=\"profile-phone-input\"]"]
+      },
+      {
+        "flow": "Settings → Company → Save Company",
+        "issue": "Same root cause: saveCompany() bundles website, industry, description with company_name. Supabase returns 400 PGRST204: \"Could not find the 'description' column of 'profiles' in the schema cache\". Company name (a valid column) also does NOT persist. Toast shows 'Save failed'.",
+        "affected_selectors": ["[data-testid=\"save-company-btn\"]", "[data-testid=\"company-name-input\"]"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_3.json"],
+  "action_items": [
+    "FIX (HIGH): Either (a) instruct user to run /app/supabase/migrations/002_realtime_and_profile_columns.sql in Supabase SQL editor to add the missing columns (timezone, website, industry, description, notif_*), OR (b) make saveProfile/saveCompany resilient when the extra columns don't exist. Option (b) is preferable so the basic full_name/phone/company_name fields can be saved immediately without depending on user-run migration. Suggested implementation: split upsert into two calls — first upsert only the columns that exist for sure (id, full_name, phone, company_name, plan), then attempt a second upsert with the optional columns and ignore PGRST204 errors. Or filter the payload to drop unknown-column errors and retry.",
+    "(Minor) Sign-out redirects to '/' (landing page) instead of '/auth/login'. Not a regression, but worth noting for header dropdown tests."
+  ],
+  "critical_code_review_comments": [
+    "POSITIVE: useSupabaseData.ts (lines 79-142) correctly calls await load() after every insert/update/remove/batchInsert — this is what makes the auto-refresh work without relying on Supabase realtime publication. Verified live on all three pages (Agents, Leads, Campaigns).",
+    "POSITIVE: Dashboard overview (/dashboard/page.tsx) now derives all 4 stat cards, 7-day call volume, recent activity, agents list, and upcoming appointments from real per-user Supabase data. No mock numbers anywhere.",
+    "POSITIVE: Analytics page computes KPIs + 6-month volume + outcome pie + agent performance from real data. Empty account shows zeros, no NaN or 'undefined'. Created agent appears in Agent Performance bar chart.",
+    "POSITIVE: Multi-user isolation works correctly — RLS at Supabase plus user_id filter in hook means User B sees zero records from User A. Email field in Settings correctly reflects each user.",
+    "POSITIVE: Calendar uses native new Date() — dynamically shows 'May 2026'.",
+    "POSITIVE: Billing tab shows 'Razorpay payment integration coming soon' — no hardcoded 2025 date.",
+    "BUG: /app/frontend/src/app/dashboard/settings/page.tsx — saveProfile (line 142) and saveCompany (line 151) send columns that do not yet exist in the live Supabase profiles table (timezone, website, industry, description). Result: the whole upsert returns 400 PGRST204 and even valid fields fail to persist. The fix can be a one-line filter to remove undefined-column keys, OR run migration 002.",
+    "MINOR: Optimistic delete in useSupabaseData.remove() (line 111) is good — agent disappears from UI before the Supabase round-trip."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend-only test)",
+    "frontend": "~85% — 13/15 verified PASS. Failing: Profile-save persistence, Company-save persistence (same root cause)."
+  },
+  "test_credentials": "Working: qa_test_a_1778863521@manolleai.test / TestPass123!  (User A, has 1 lead 'QA Lead One' + 1 campaign 'QA Campaign Z', agent was deleted during testing).  And qa_test_b_1778863682@manolleai.test / TestPass123! (User B, fresh empty account — used for isolation test).",
+  "seed_data_creation": "Created 2 Supabase auth users (A + B) and 1 lead + 1 campaign on User A (agent was deleted during delete-flow test). All other tables empty.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The CRUD auto-refresh story is FIXED and verified. The only outstanding bug is Settings Profile/Company save failing because of un-migrated columns (timezone, description, website, industry, notif_*). After main agent applies a fix (either run migration 002 or filter the upsert payload), retest: (1) /dashboard/settings → Profile tab → fill name + phone → Save Profile → reload → values must persist. (2) Same for Company tab. The Notifications tab will also be affected (all notif_* columns are missing). Login with qa_test_a_1778863521@manolleai.test / TestPass123! to skip signup.",
+  "rca of the issue": "Settings save failure RCA: Supabase REST upsert (PostgREST) returns HTTP 400 with code PGRST204 when ANY column in the request body is not present in the schema cache. The code in /app/frontend/src/app/dashboard/settings/page.tsx bundles new (unmigrated) columns 'timezone' / 'description' with the basic columns in a single upsert call, so PostgREST rejects the entire request and even valid columns (full_name, phone, company_name) are not written. Reproduction: log in with the credentials above → /dashboard/settings → fill 'Full Name' and 'Phone' → click Save Profile → toast 'Save failed' → network response: 400 PGRST204 'Could not find the timezone column of profiles in the schema cache'. Mitigation options: (a) Apply migration 002_realtime_and_profile_columns.sql in Supabase SQL editor to add the missing columns. (b) Code fix: build the upsert payload to only include columns that exist; or wrap the call in try/catch, detect PGRST204, drop the offending column and retry. Option (b) is preferable because it removes the dependency on a user-run migration."
+}

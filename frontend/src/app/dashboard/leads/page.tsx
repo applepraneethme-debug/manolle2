@@ -40,9 +40,6 @@ import { toast } from "sonner";
 import {
   useLeads,
   useCampaigns,
-  dbInsert,
-  dbUpdate,
-  dbDelete,
   type DbLead,
 } from "@/hooks/useSupabaseData";
 
@@ -57,7 +54,7 @@ const statusVariant: Record<string, string> = {
 };
 
 export default function LeadsPage() {
-  const { data: leads, loading } = useLeads();
+  const { data: leads, loading, insert, update, remove } = useLeads();
   const { data: campaigns } = useCampaigns();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -108,7 +105,7 @@ export default function LeadsPage() {
         status: "new",
       };
       if (form.campaign_id) payload.campaign_id = form.campaign_id;
-      await dbInsert("leads", payload);
+      await insert(payload);
       toast.success("Lead added");
       setDialogOpen(false);
     } catch (e: unknown) {
@@ -120,7 +117,7 @@ export default function LeadsPage() {
 
   const handleStatusChange = async (lead: DbLead, status: DbLead["status"]) => {
     try {
-      await dbUpdate("leads", lead.id, { status });
+      await update(lead.id, { status });
       toast.success(`Marked as ${status}`);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to update");
@@ -130,7 +127,7 @@ export default function LeadsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("Remove this lead?")) return;
     try {
-      await dbDelete("leads", id);
+      await remove(id);
       toast.success("Lead removed");
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to delete");

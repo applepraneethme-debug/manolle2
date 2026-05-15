@@ -17,7 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { dbBatchInsert, getAuthUser } from "@/hooks/useSupabaseData";
+import { useLeads, getAuthUser } from "@/hooks/useSupabaseData";
 import { createClient } from "@/lib/supabase/client";
 
 type ParsedLead = {
@@ -95,6 +95,7 @@ function parseLeads(text: string): ParsedLead[] {
 }
 
 export default function ImportPage() {
+  const { batchInsert } = useLeads();
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -170,7 +171,7 @@ export default function ImportPage() {
         source: "csv_import",
         status: "new",
       }));
-      await dbBatchInsert("leads", payload);
+      await batchInsert(payload);
       toast.success(`${valid.length} leads imported to your account`);
       setParsed([]);
       setFileName("");

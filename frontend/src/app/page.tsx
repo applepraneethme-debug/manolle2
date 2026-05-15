@@ -698,7 +698,7 @@ export default function LandingPage() {
           </div>
           <div className="border-t border-white/5 pt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
             <p className="text-[#71717A] text-sm">
-              © 2025 Manolle AI. All rights reserved.
+              © {new Date().getFullYear()} Manolle AI. All rights reserved.
             </p>
             <div className="flex gap-4 text-sm text-[#71717A]">
               <Link href="#" className="hover:text-white transition-colors">Privacy</Link>

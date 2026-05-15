@@ -34,9 +34,6 @@ import { toast } from "sonner";
 import {
   useCampaigns,
   useAgents,
-  dbInsert,
-  dbUpdate,
-  dbDelete,
   type DbCampaign,
 } from "@/hooks/useSupabaseData";
 
@@ -48,7 +45,7 @@ const statusMap: Record<string, { label: string; variant: string }> = {
 };
 
 export default function CampaignsPage() {
-  const { data: campaigns, loading } = useCampaigns();
+  const { data: campaigns, loading, insert, update, remove } = useCampaigns();
   const { data: agents } = useAgents();
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -92,10 +89,10 @@ export default function CampaignsPage() {
       };
       if (form.agent_id) payload.agent_id = form.agent_id;
       if (editing) {
-        await dbUpdate("campaigns", editing.id, payload);
+        await update(editing.id, payload);
         toast.success("Campaign updated");
       } else {
-        await dbInsert("campaigns", {
+        await insert({
           ...payload,
           total_leads: 0,
           leads_called: 0,
@@ -114,7 +111,7 @@ export default function CampaignsPage() {
   const toggleStatus = async (c: DbCampaign) => {
     const next: DbCampaign["status"] = c.status === "running" ? "paused" : "running";
     try {
-      await dbUpdate("campaigns", c.id, { status: next });
+      await update(c.id, { status: next });
       toast.success(`Campaign ${next}`);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to update");
@@ -124,7 +121,7 @@ export default function CampaignsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this campaign?")) return;
     try {
-      await dbDelete("campaigns", id);
+      await remove(id);
       toast.success("Campaign deleted");
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to delete");

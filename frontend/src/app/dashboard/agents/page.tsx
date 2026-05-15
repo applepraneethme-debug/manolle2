@@ -31,13 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import {
-  useAgents,
-  dbInsert,
-  dbUpdate,
-  dbDelete,
-  type DbAgent,
-} from "@/hooks/useSupabaseData";
+import { useAgents, type DbAgent } from "@/hooks/useSupabaseData";
 
 const voices = [
   { value: "professional-male", label: "Professional Male" },
@@ -48,7 +42,7 @@ const voices = [
 ];
 
 export default function AgentsPage() {
-  const { data: agents, loading } = useAgents();
+  const { data: agents, loading, insert, update, remove } = useAgents();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<DbAgent | null>(null);
   const [saving, setSaving] = useState(false);
@@ -82,10 +76,10 @@ export default function AgentsPage() {
     setSaving(true);
     try {
       if (editing) {
-        await dbUpdate("ai_agents", editing.id, form);
+        await update(editing.id, form);
         toast.success("Agent updated");
       } else {
-        await dbInsert("ai_agents", { ...form, is_active: true, calls_made: 0 });
+        await insert({ ...form, is_active: true, calls_made: 0 });
         toast.success("Agent created");
       }
       setDialogOpen(false);
@@ -98,7 +92,7 @@ export default function AgentsPage() {
 
   const toggleStatus = async (agent: DbAgent) => {
     try {
-      await dbUpdate("ai_agents", agent.id, { is_active: !agent.is_active });
+      await update(agent.id, { is_active: !agent.is_active });
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to toggle");
     }
@@ -107,7 +101,7 @@ export default function AgentsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this agent? This action cannot be undone.")) return;
     try {
-      await dbDelete("ai_agents", id);
+      await remove(id);
       toast.success("Agent deleted");
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to delete");
