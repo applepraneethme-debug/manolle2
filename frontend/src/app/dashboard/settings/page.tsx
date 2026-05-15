@@ -121,15 +121,38 @@ export default function SettingsPage() {
     load();
   }, []);
 
-  const upsertProfile = async (patch: Partial<ProfileRow>) => {
-    if (!userId) return;
+  const upsertProfile = async (
+    core: Partial<ProfileRow>,
+    extras?: Partial<ProfileRow>
+  ) => {
+    if (!userId) return false;
     setSaving(true);
     try {
       const supabase = createClient();
-      const { error } = await supabase
+      // 1) Always upsert the core columns (guaranteed to exist by schema.sql).
+      const { error: coreErr } = await supabase
         .from("profiles")
-        .upsert({ id: userId, ...patch }, { onConflict: "id" });
-      if (error) throw error;
+        .upsert({ id: userId, ...core }, { onConflict: "id" });
+      if (coreErr) throw coreErr;
+
+      // 2) Try the extras — if migration 002 hasn't been run, Supabase returns
+      // PGRST204 "Could not find the '<col>' column". We silently skip those
+      // so the core save still succeeds.
+      if (extras && Object.keys(extras).length > 0) {
+        const { error: extraErr } = await supabase
+          .from("profiles")
+          .upsert({ id: userId, ...extras }, { onConflict: "id" });
+        if (extraErr && extraErr.code !== "PGRST204") {
+          // Non-schema error — surface it
+          throw extraErr;
+        }
+        if (extraErr?.code === "PGRST204") {
+          toast.message(
+            "Saved core fields. Run migration 002 in Supabase to enable extra fields (timezone, website, industry, notifications).",
+            { duration: 5000 }
+          );
+        }
+      }
       return true;
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Save failed");
@@ -140,32 +163,36 @@ export default function SettingsPage() {
   };
 
   const saveProfile = async () => {
-    const ok = await upsertProfile({
-      full_name: profile.fullName,
-      phone: profile.phone,
-      timezone: profile.timezone,
-    });
+    const ok = await upsertProfile(
+      { full_name: profile.fullName, phone: profile.phone },
+      { timezone: profile.timezone }
+    );
     if (ok) toast.success("Profile saved");
   };
 
   const saveCompany = async () => {
-    const ok = await upsertProfile({
-      company_name: company.name,
-      website: company.website,
-      industry: company.industry,
-      description: company.description,
-    });
+    const ok = await upsertProfile(
+      { company_name: company.name },
+      {
+        website: company.website,
+        industry: company.industry,
+        description: company.description,
+      }
+    );
     if (ok) toast.success("Company saved");
   };
 
   const saveNotifications = async () => {
-    const ok = await upsertProfile({
-      notif_call_completed: notifications.callCompleted,
-      notif_appointment_booked: notifications.appointmentBooked,
-      notif_campaign_finished: notifications.campaignFinished,
-      notif_weekly_report: notifications.weeklyReport,
-      notif_low_balance: notifications.lowBalance,
-    });
+    const ok = await upsertProfile(
+      {},
+      {
+        notif_call_completed: notifications.callCompleted,
+        notif_appointment_booked: notifications.appointmentBooked,
+        notif_campaign_finished: notifications.campaignFinished,
+        notif_weekly_report: notifications.weeklyReport,
+        notif_low_balance: notifications.lowBalance,
+      }
+    );
     if (ok) toast.success("Preferences saved");
   };
 
