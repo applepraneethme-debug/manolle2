@@ -1,76 +1,69 @@
 # Manolle AI — PRD
 
 ## Overview
-Manolle AI is a production-grade AI calling automation SaaS platform. AI voice agents automatically call leads, qualify prospects, book appointments, and provide call summaries. Primary use cases: Real Estate (site visits) and Healthcare/Appointments.
+Manolle AI is a production-grade AI calling automation SaaS. AI voice agents call leads, qualify prospects, book appointments, and provide call summaries. Use cases: Real Estate, Healthcare.
 
 ## Tech Stack
-- **Frontend**: Next.js 15 App Router, TypeScript, Tailwind CSS, Framer Motion, Shadcn UI
-- **Backend / Data**: Supabase PostgreSQL + Supabase Auth (RLS enforced). FastAPI placeholder exists but is unused.
-- **UI**: Glassmorphism, dark-first, cyan (#00F0FF) accent, Outfit + Manrope fonts
-- **Realtime**: Supabase `postgres_changes` subscriptions per table
+- **Frontend**: Next.js 15 App Router, TypeScript, Tailwind, Framer Motion, Shadcn UI
+- **Data**: Supabase Postgres + Supabase Auth (RLS, user_id-scoped)
+- **UI**: Dark-first, cyan (#00F0FF) accent, glassmorphism
+- **Realtime**: Supabase `postgres_changes` (optional) PLUS hook-level auto-reload after every mutation
 
 ## Architecture
-- `/app/frontend` — Next.js 15 app (port 3000), runs in PRODUCTION mode via `next build && next start`
-- `/app/backend` — empty FastAPI (placeholder)
-- `/app/supabase/schema.sql` — PostgreSQL schema (RLS policies + auto-profile trigger)
-- `/app/frontend/src/hooks/useSupabaseData.ts` — central real-time data layer + CRUD helpers scoped to user_id
+- `/app/frontend` — Next.js 15 app, prod mode (`next build && next start`)
+- `/app/supabase/schema.sql` — base schema
+- `/app/supabase/migrations/002_realtime_and_profile_columns.sql` — Realtime publication + extra profile columns
+- `/app/frontend/src/hooks/useSupabaseData.ts` — central per-user data layer with `insert/update/remove/batchInsert` that auto-reload (works without Realtime publication)
 
-## Implemented Features (Feb 2026)
+## Implemented (verified Feb 2026)
 
-### Landing & Auth
-- Landing page with hero, features, use cases, pricing
-- Supabase email/password Signup, Login, Forgot/Reset Password, OAuth callback route
-- Middleware-based route protection
+### Auth
+- Supabase email/password signup/login/forgot/reset
+- Middleware-protected `/dashboard/*` routes
+- Auto-confirm enabled (no email verification needed)
 
-### Dashboard — wired to live Supabase (user-scoped, real-time)
-- **Header**: Notification dropdown (Bell) + Profile dropdown (Avatar) with email, Settings/Profile links, Sign out — `data-testid` on every element
-- **AI Agents** (`/dashboard/agents`): Create/Edit/Delete/Toggle active via `ai_agents` table. Real-time list refresh.
-- **Campaigns** (`/dashboard/campaigns`): Create/Edit/Delete + Pause/Resume status toggle via `campaigns` table.
-- **Leads** (`/dashboard/leads`): Add Lead dialog (name + phone required), status changes, delete. Filter + search.
-- **Call History** (`/dashboard/call-history`): Lists `call_logs` joined with leads/agents from hooks. Delete supported. Dynamic Today/Yesterday/date formatting.
-- **Calendar** (`/dashboard/calendar`): Native `new Date()` for current month, merges `appointments` + `call_logs`, Today button, day-event preview, upcoming list.
-- **Import CSV** (`/dashboard/import`): Real CSV parsing (quoted fields supported), header detection (name/phone/email), valid/error/duplicate classification, batch insert via `dbBatchInsert`, optional per-user storage path `csv-imports/{user_id}/...`.
-- **Settings**: Profile, Company, Notifications toggles, Billing (UI for 3 plans).
+### Dashboard — all user-scoped, real-time
+- **Header**: Notification dropdown + Avatar dropdown showing user email, Settings/Profile/Sign out
+- **/dashboard overview**: Real per-user KPIs (Calls Completed, Minutes Used, Leads Contacted, Appointments Booked), 7-day call volume chart, recent activity, agent list, upcoming appointments — all from Supabase. ZERO mock data remaining.
+- **/dashboard/agents**: Create/Edit/Delete/Toggle. Auto-refresh after mutation.
+- **/dashboard/campaigns**: Create/Edit/Delete + Pause/Resume.
+- **/dashboard/leads**: Add Lead, status changes, delete. Search + filter.
+- **/dashboard/call-history**: View + delete call logs. Joins with leads/agents.
+- **/dashboard/calendar**: Native `new Date()`, merges appointments + call_logs.
+- **/dashboard/import**: Real CSV parsing (quoted fields), header detection, valid/error/duplicate badges, batch insert to Supabase.
+- **/dashboard/analytics**: 4 KPIs (% change vs last month), 6-month volume area chart, outcome pie, agent performance bar chart — all computed from per-user Supabase data.
+- **/dashboard/settings**: Profile + Company + Notifications + Billing tabs. Reads/upserts `profiles` table (email read-only from auth). Resilient upsert: splits into core columns (always exist) and extras (silently skipped if migration 002 not applied).
 
-### Data layer (`useSupabaseData.ts`)
-- `useAgents/useLeads/useCampaigns/useCallLogs/useAppointments` — auto-fetch + subscribe to postgres_changes
-- `dbInsert/dbUpdate/dbDelete/dbBatchInsert` — always attach `user_id` from auth on insert
-- RLS policies on every table ensure server-side isolation
+### Data isolation (verified multi-user)
+- RLS server-side: every table has `auth.uid() = user_id` policy
+- Hook-level: every SELECT adds `.eq("user_id", user.id)`, every INSERT auto-attaches `user_id`
+- Verified: User B sees zero of User A's data
 
-### Still on mock data (deferred)
-- `/dashboard` overview KPIs and activity feed (P1)
-- `/dashboard/analytics` charts (P1)
-
-## Configuration
-
-### Environment Variables
-Frontend (`.env`):
-- REACT_APP_BACKEND_URL
-- NEXT_PUBLIC_SUPABASE_URL
-- NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-Backend (`.env`):
-- MONGO_URL, DB_NAME (unused — FastAPI is placeholder)
+## Supabase migrations
+1. `/app/supabase/schema.sql` — base tables, RLS policies, auto-profile trigger (already run)
+2. `/app/supabase/migrations/002_realtime_and_profile_columns.sql` — adds profile columns + enables realtime publication (optional, app works without it)
 
 ## Backlog
 
-### P1 (Next)
-- Wire `/dashboard` overview KPIs & activity feed to real Supabase counts
-- Wire `/dashboard/analytics` charts to real call_logs / appointments data
-- Create optional Supabase Storage bucket `csv-imports` (currently bypassed gracefully if missing)
+### P1
+- Run migration 002 in Supabase to unlock cross-tab realtime + full Settings persistence
+- Create Supabase Storage bucket `csv-imports` for actual CSV file storage
 
-### P2 (Future)
-- ChatGPT / Emergent LLM integration to test agent system prompts
-- Twilio/VAPI for actual outbound AI calls
-- Call recording playback UI
-- Real-time call transcripts
-- Razorpay subscription billing (3 plans)
-- CRM integrations
-- White-label option for Enterprise
-- Mobile app
+### P2
+- ChatGPT / Emergent LLM for agent prompt testing in-app
+- Twilio/VAPI for outbound AI calls + recording playback + live transcripts
+- Razorpay 3-plan subscription billing in Settings
+- CRM integrations, white-label, mobile app
 
 ## Test Credentials
-See `/app/memory/test_credentials.md` for the verified working account.
+See `/app/memory/test_credentials.md`.
 
-## Recent Changes (2026-02 fork)
-- 2026-05-14: Implemented Message 94 P0 batch — header dropdowns wired, calendar uses native `new Date()`, full Supabase CRUD on Agents/Leads/Campaigns/Call History/Import, deletes now fire real DB requests with auto-refresh via realtime subscriptions, CSV import does real parsing + batch insert. Moved sonner toast to `bottom-right` (was overlapping header buttons).
+## Changelog
+- **2026-02 (initial fork)**: header dropdowns, calendar new Date(), full CRUD on Agents/Leads/Campaigns/Call History/Import, deletes auto-update UI, sonner toast bottom-right.
+- **2026-05 (this iteration)**:
+  - Rewrote `useSupabaseData.ts` hook → mutators auto-reload after every CUD (works without Realtime publication)
+  - Killed all mock data on `/dashboard` (no more 247/1847/189/43)
+  - Rewrote `/dashboard/analytics` to be fully user-scoped
+  - Wired Settings to live `profiles` table with resilient split upsert (core + extras)
+  - Replaced last hardcoded "2025" strings with `new Date().getFullYear()` / dynamic
+  - Added migration 002 SQL: realtime publication + profile extra columns
