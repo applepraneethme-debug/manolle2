@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import {
   Phone, Bot, Users, Calendar, BarChart3, Upload, CheckCircle2,
-  Building2, Stethoscope, ArrowRight, Zap, Clock, TrendingUp, Star,
+  Building2, Stethoscope, Scissors, ArrowRight, Zap, Clock, TrendingUp, Star,
   Play, ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -65,7 +65,7 @@ const useCases = [
     tag: "Real Estate",
     title: "Automate Property Inquiries",
     description:
-      "AI agents call every lead from your listings portal, qualify their budget, and book site visits automatically.",
+      "Automated lead qualification and site-visit scheduling — AI calls every inquiry, qualifies budget, and books visits.",
     stats: [
       { value: "3x", label: "More site visits booked" },
       { value: "80%", label: "Less manual calling time" },
@@ -74,15 +74,27 @@ const useCases = [
   },
   {
     icon: Stethoscope,
-    tag: "Healthcare & Clinics",
+    tag: "Clinics",
     title: "Never Miss an Appointment",
     description:
-      "AI calls patients to confirm appointments, handle rescheduling, and send follow-up reminders automatically.",
+      "Patient appointment booking and automated reminders — confirm, reschedule, and follow up on autopilot.",
     stats: [
       { value: "60%", label: "Reduction in no-shows" },
       { value: "2x", label: "Appointment capacity" },
     ],
     color: "#0066FF",
+  },
+  {
+    icon: Scissors,
+    tag: "Barbershops",
+    title: "Fill Every Chair",
+    description:
+      "Seamless slot booking and haircut appointment management — confirm walk-ins, fill open slots, reduce no-shows.",
+    stats: [
+      { value: "40%", label: "More bookings/week" },
+      { value: "24/7", label: "Always-on booking line" },
+    ],
+    color: "#F59E0B",
   },
 ];
 
@@ -336,7 +348,7 @@ export default function LandingPage() {
             </h2>
           </motion.div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {useCases.map((uc, i) => (
               <motion.div
                 key={uc.title}
