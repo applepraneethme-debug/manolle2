@@ -381,34 +381,49 @@ export function buildFeedbackSummary(
   return "Call completed. No transcript was received from Vapi.";
 }
 
+function extractDateFromText(text: string): string | undefined {
+  // Match patterns like "tomorrow at 9 AM", "today at 3pm", "next monday", "26th May", etc.
+  const patterns = [
+    /\b(tomorrow)\b/i,
+    /\b(today)\b/i,
+    /\b(day after tomorrow)\b/i,
+    /\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+    /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/,
+    /\b(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})\b/,
+    /\b(\d{1,2})(?:st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december)\b/i,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) return normalizeDate(match[0]);
+  }
+  return undefined;
+}
+
+function extractTimeFromText(text: string): string | undefined {
+  // Match patterns like "9 AM", "9:00 AM", "3pm", "15:00"
+  const match = text.match(/\b(0?[1-9]|1[0-2])(?::([0-5]\d))?\s*(am|pm)\b/i) ||
+    text.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+  if (match) return normalizeTime(match[0]);
+  return undefined;
+}
+
 export function extractAppointment(
   structuredData: Record<string, unknown>,
   text: string
 ) {
-  const date = normalizeDate(
-    valueFromObject(structuredData, [
-      "appointmentDate",
-      "siteVisitDate",
-      "site_visit_date",
-      "visitDate",
-      "date",
-    ]) ||
-      getNestedString(structuredData, ["appointment", "date"]) ||
-      getNestedString(structuredData, ["booking", "date"]) ||
-      text
-  );
-  const time = normalizeTime(
-    valueFromObject(structuredData, [
-      "appointmentTime",
-      "siteVisitTime",
-      "site_visit_time",
-      "visitTime",
-      "time",
-    ]) ||
-      getNestedString(structuredData, ["appointment", "time"]) ||
-      getNestedString(structuredData, ["booking", "time"]) ||
-      text
-  );
+  // Try structured data first, then fall back to parsing from text
+  const structuredDate =
+    valueFromObject(structuredData, ["appointmentDate", "siteVisitDate", "site_visit_date", "visitDate", "date"]) ||
+    getNestedString(structuredData, ["appointment", "date"]) ||
+    getNestedString(structuredData, ["booking", "date"]);
+
+  const structuredTime =
+    valueFromObject(structuredData, ["appointmentTime", "siteVisitTime", "site_visit_time", "visitTime", "time"]) ||
+    getNestedString(structuredData, ["appointment", "time"]) ||
+    getNestedString(structuredData, ["booking", "time"]);
+
+  const date = normalizeDate(structuredDate) || extractDateFromText(text);
+  const time = normalizeTime(structuredTime) || extractTimeFromText(text);
   const type =
     valueFromObject(structuredData, ["appointmentType", "type"]) || "site_visit";
   const booked =
