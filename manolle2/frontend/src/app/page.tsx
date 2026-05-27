@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import {
   Phone, Bot, Users, Calendar, BarChart3, Upload, CheckCircle2,
-  Building2, Stethoscope, Scissors, ArrowRight, Zap, Clock, TrendingUp, Star,
+  Building2, Stethoscope, Scissors, ArrowRight, Zap, TrendingUp, Star,
   Play, ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";

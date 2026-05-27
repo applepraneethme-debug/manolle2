@@ -1,0 +1,11 @@
+{
+  "name": "manolle2",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix manolle2/frontend run dev",
+    "build": "npm --prefix manolle2/frontend run build",
+    "start": "npm --prefix manolle2/frontend run start",
+    "typecheck": "npm --prefix manolle2/frontend run typecheck",
+    "lint": "npm --prefix manolle2/frontend run lint"
+  }
+}
