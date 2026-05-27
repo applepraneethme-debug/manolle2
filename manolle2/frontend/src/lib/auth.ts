@@ -150,7 +150,7 @@ export async function createAdminSession() {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
-    path: "/admin",
+   path: "/",
     expires: new Date(expires),
   });
 }
